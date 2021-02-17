@@ -85,6 +85,30 @@ class Battlesnake(object):
           danger["x"] -= 1
           head_hazards.append(danger)
 
+         #all the squares around bodies are areas you can get trapped in, we will try
+         #to avoid those areas if possible)
+        body_hazards = []
+        for part in snake_bodies:
+          #up
+          danger = part.copy()
+          danger["y"] += 1
+          body_hazards.append(danger)
+
+          #down
+          danger = part.copy()
+          danger["y"] -= 1
+          body_hazards.append(danger)
+
+          #left
+          danger = part.copy() 
+          danger["x"] += 1
+          body_hazards.append(danger)
+
+          #right
+          danger = part.copy() 
+          danger["x"] -= 1
+          body_hazards.append(danger)
+
         #determine where the nearest food is, so can hunt it down
         food = board['food']
 
@@ -128,20 +152,27 @@ class Battlesnake(object):
         def crash_test(hazards,p_h):
           return p_h["x"] < 0 or p_h["x"] >= 11 or p_h["y"] < 0 or p_h["y"] >= 11 or p_h in hazards
 
+        #this function returns how likely getting trapped will be if move to a spot
+        def buffer_test(hazarrds,p_h):
+          return hazards.co
+
+
         #define hazard zones relative to edges
         green = [3,4,5,6,7]
         yellow = [1,2,8,9]
         red = [0,10]
-        
+
+      
         edge_weight = 2
 
         if you["health"] < 30:
-          food_weight = 1
+          food_weight = 10
         else:
-          food_weight = -1
+          food_weight = -.1
 
         crash_weight = 100
         head_weight = 50
+        body_weight = 6
         # hazards: snake_bodies, head_hazards, edges
         ##################################
         ## pros and cons of going right ##
@@ -157,6 +188,9 @@ class Battlesnake(object):
         # as bad as crashing into a wall or body
         if crash_test(head_hazards,p_h):
           go_right -= head_weight
+
+        #we are going to try to keep a buffer between our head and bodies
+        go_right -= body_weight*body_hazards.count(p_h) 
 
          #penalty for going towards edges where might get pinned
         if p_h["x"] in yellow:
@@ -187,6 +221,9 @@ class Battlesnake(object):
         if crash_test(head_hazards,p_h):
           go_left -= head_weight 
 
+        #we are going to try to keep a buffer between our head and bodies
+        go_left -= body_weight*body_hazards.count(p_h)
+
         #penalty for going towards edges where might get pinned
         if p_h["x"] in yellow:
           go_left -= edge_weight
@@ -216,6 +253,9 @@ class Battlesnake(object):
         if crash_test(head_hazards,p_h):
           go_up -= head_weight 
 
+        #we are going to try to keep a buffer between our head and bodies
+        go_up -= body_weight*body_hazards.count(p_h) 
+
         #penalty for going towards edges where might get pinned
         if p_h["x"] in yellow:
           go_up -= edge_weight
@@ -240,6 +280,9 @@ class Battlesnake(object):
         if crash_test(snake_bodies,p_h):
           go_down -= crash_weight 
 
+        #we are going to try to keep a buffer between our head and bodies
+        go_down -= body_weight*body_hazards.count(p_h)
+
         #penalty for going towards edges where might get pinned
         if p_h["x"] in yellow:
           go_down -= edge_weight
@@ -256,7 +299,7 @@ class Battlesnake(object):
           go_down -= head_weight 
 
         #for now we want it to go towards the nearest food  
-        go_left += (base_food - nearby_food(food,p_h))*food_weight
+        go_down += (base_food - nearby_food(food,p_h))*food_weight
 
 
 
