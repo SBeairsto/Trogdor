@@ -53,10 +53,37 @@ class Battlesnake(object):
 
         #determine which board spaces are occupied by snakes
         snake_bodies = []
+        snake_heads = []
         snakes = board["snakes"].copy()
 
         for snake in snakes:
           snake_bodies += snake["body"]
+          if snake["head"] != head:
+            snake_heads.append(snake["head"])
+
+
+        #all the square the other snakes might move are also hazards (unless you are bigger than them)
+        head_hazards = []
+        for enemy_head in snake_heads:
+          #up
+          danger = enemy_head.copy()
+          danger["y"] += 1
+          head_hazards.append(danger)
+
+          #down
+          danger = enemy_head.copy()
+          danger["y"] -= 1
+          head_hazards.append(danger)
+
+          #left
+          danger = enemy_head.copy() 
+          danger["x"] += 1
+          head_hazards.append(danger)
+
+          #right
+          danger = enemy_head.copy() 
+          danger["x"] -= 1
+          head_hazards.append(danger)
 
         #determine where the nearest food is, so can hunt it down
         food = board['food']
@@ -101,16 +128,21 @@ class Battlesnake(object):
         def crash_test(hazards,p_h):
           return p_h["x"] < 0 or p_h["x"] >= 11 or p_h["y"] < 0 or p_h["y"] >= 11 or p_h in hazards
 
-
+        # hazards: snake_bodies and head_hazards
         ##################################
         ## pros and cons of going right ##
         ##################################
 
         p_h = proposed_head(head,"right")
 
-        #crashing is obviously a big no no
+        #crashing into snakes and walls is obviously a big no no
         if crash_test(snake_bodies,p_h):
           go_right -= 100 
+
+        #going where you might collide with the head of another snake is bad, but not
+        # as bad as crashing into a wall or body
+        if crash_test(head_hazards,p_h):
+          go_right -= 50 
 
         #for now we want it to go towards the nearest food  
         go_right += base_food - nearby_food(food,p_h)
@@ -124,6 +156,11 @@ class Battlesnake(object):
         if crash_test(snake_bodies,p_h):
           go_left -= 100  
 
+        #going where you might collide with the head of another snake is bad, but not
+        # as bad as crashing into a wall or body
+        if crash_test(head_hazards,p_h):
+          go_left -= 50 
+
         #for now we want it to go towards the nearest food  
         go_left += base_food - nearby_food(food,p_h)
 
@@ -136,6 +173,11 @@ class Battlesnake(object):
         if crash_test(snake_bodies,p_h):
           go_up -= 100 
 
+        #going where you might collide with the head of another snake is bad, but not
+        # as bad as crashing into a wall or body
+        if crash_test(head_hazards,p_h):
+          go_up -= 50 
+
         #for now we want it to go towards the nearest food  
         go_up += base_food - nearby_food(food,p_h)
 
@@ -147,6 +189,11 @@ class Battlesnake(object):
         #crashing is obviously a big no no
         if crash_test(snake_bodies,p_h):
           go_down -= 100 
+
+        #going where you might collide with the head of another snake is bad, but not
+        # as bad as crashing into a wall or body
+        if crash_test(head_hazards,p_h):
+          go_down -= 50 
 
         #for now we want it to go towards the nearest food  
         go_left += base_food - nearby_food(food,p_h)
