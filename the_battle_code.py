@@ -48,8 +48,17 @@ class Battlesnake(object):
         head = you["head"]
         body = you["body"]
 
-        #determine where the nearest food is, so can hunt it down
+        
         board = data["board"].copy()
+
+        #determine which board spaces are occupied by snakes
+        snake_bodies = []
+        snakes = board["snakes"].copy()
+
+        for snake in snakes:
+          snake_bodies += snake["body"]
+
+        #determine where the nearest food is, so can hunt it down
         food = board['food']
 
         #this function returns the distance of the nearest food
@@ -89,8 +98,8 @@ class Battlesnake(object):
         go_right = 0
 
         #determines whether a proposed move will make the snake crash
-        def crash_test(body,p_h):
-          return p_h["x"] < 0 or p_h["x"] >= 11 or p_h["y"] < 0 or p_h["y"] >= 11 or p_h in body
+        def crash_test(hazards,p_h):
+          return p_h["x"] < 0 or p_h["x"] >= 11 or p_h["y"] < 0 or p_h["y"] >= 11 or p_h in hazards
 
 
         ##################################
@@ -100,7 +109,7 @@ class Battlesnake(object):
         p_h = proposed_head(head,"right")
 
         #crashing is obviously a big no no
-        if crash_test(body,p_h):
+        if crash_test(snake_bodies,p_h):
           go_right -= 100 
 
         #for now we want it to go towards the nearest food  
@@ -112,7 +121,7 @@ class Battlesnake(object):
         p_h = proposed_head(head,"left")
 
         #crashing is obviously a big no no
-        if crash_test(body,p_h):
+        if crash_test(snake_bodies,p_h):
           go_left -= 100  
 
         #for now we want it to go towards the nearest food  
@@ -124,7 +133,7 @@ class Battlesnake(object):
         p_h = proposed_head(head,"up")
 
         #crashing is obviously a big no no
-        if crash_test(body,p_h):
+        if crash_test(snake_bodies,p_h):
           go_up -= 100 
 
         #for now we want it to go towards the nearest food  
@@ -136,7 +145,7 @@ class Battlesnake(object):
         p_h = proposed_head(head,"down")
 
         #crashing is obviously a big no no
-        if crash_test(body,p_h):
+        if crash_test(snake_bodies,p_h):
           go_down -= 100 
 
         #for now we want it to go towards the nearest food  
