@@ -48,8 +48,44 @@ class Battlesnake(object):
         head = you["head"]
         body = you["body"]
 
-        #determine where the nearest food is, so can hunt it down
+        
         board = data["board"].copy()
+
+        #determine which board spaces are occupied by snakes
+        snake_bodies = []
+        snake_heads = []
+        snakes = board["snakes"].copy()
+
+        for snake in snakes:
+          snake_bodies += snake["body"]
+          if snake["head"] != head:
+            snake_heads.append(snake["head"])
+
+
+        #all the square the other snakes might move are also hazards (unless you are bigger than them)
+        head_hazards = []
+        for enemy_head in snake_heads:
+          #up
+          danger = enemy_head.copy()
+          danger["y"] += 1
+          head_hazards.append(danger)
+
+          #down
+          danger = enemy_head.copy()
+          danger["y"] -= 1
+          head_hazards.append(danger)
+
+          #left
+          danger = enemy_head.copy() 
+          danger["x"] += 1
+          head_hazards.append(danger)
+
+          #right
+          danger = enemy_head.copy() 
+          danger["x"] -= 1
+          head_hazards.append(danger)
+
+        #determine where the nearest food is, so can hunt it down
         food = board['food']
 
         #this function returns the distance of the nearest food
@@ -89,22 +125,53 @@ class Battlesnake(object):
         go_right = 0
 
         #determines whether a proposed move will make the snake crash
-        def crash_test(body,p_h):
-          return p_h["x"] < 0 or p_h["x"] >= 11 or p_h["y"] < 0 or p_h["y"] >= 11 or p_h in body
+        def crash_test(hazards,p_h):
+          return p_h["x"] < 0 or p_h["x"] >= 11 or p_h["y"] < 0 or p_h["y"] >= 11 or p_h in hazards
 
+        #define hazard zones relative to edges
+        green = [3,4,5,6,7]
+        yellow = [1,2,8,9]
+        red = [0,10]
+        
+        edge_weight = 2
 
+        if you["health"] < 30:
+          food_weight = 1
+        else:
+          food_weight = -1
+
+        crash_weight = 100
+        head_weight = 50
+        # hazards: snake_bodies, head_hazards, edges
         ##################################
         ## pros and cons of going right ##
         ##################################
 
         p_h = proposed_head(head,"right")
 
-        #crashing is obviously a big no no
-        if crash_test(body,p_h):
-          go_right -= 100 
+        #crashing into snakes and walls is obviously a big no no
+        if crash_test(snake_bodies,p_h):
+          go_right -= crash_weight 
+
+        #going where you might collide with the head of another snake is bad, but not
+        # as bad as crashing into a wall or body
+        if crash_test(head_hazards,p_h):
+          go_right -= head_weight
+
+         #penalty for going towards edges where might get pinned
+        if p_h["x"] in yellow:
+          go_right -= edge_weight
+        if p_h["y"] in yellow:
+          go_right -= edge_weight
+        if p_h["x"] in red:
+          go_right -= 2*edge_weight
+        if p_h["y"] in red:
+          go_right -= 2*edge_weight
 
         #for now we want it to go towards the nearest food  
-        go_right += base_food - nearby_food(food,p_h)
+        go_right += (base_food - nearby_food(food,p_h))*food_weight
+        
+        
         
         ##################################
         ## pros and cons of going left ##
@@ -112,35 +179,87 @@ class Battlesnake(object):
         p_h = proposed_head(head,"left")
 
         #crashing is obviously a big no no
-        if crash_test(body,p_h):
-          go_left -= 100  
+        if crash_test(snake_bodies,p_h):
+          go_left -= crash_weight  
+
+        #going where you might collide with the head of another snake is bad, but not
+        # as bad as crashing into a wall or body
+        if crash_test(head_hazards,p_h):
+          go_left -= head_weight 
+
+        #penalty for going towards edges where might get pinned
+        if p_h["x"] in yellow:
+          go_left -= edge_weight
+        if p_h["y"] in yellow:
+          go_left -= edge_weight
+        if p_h["x"] in red:
+          go_left -= 2*edge_weight
+        if p_h["y"] in red:
+          go_left -= 2*edge_weight
 
         #for now we want it to go towards the nearest food  
-        go_left += base_food - nearby_food(food,p_h)
+        go_left += (base_food - nearby_food(food,p_h))*food_weight
 
+        
+        
         ##################################
         ## pros and cons of going up ##
         ##################################
         p_h = proposed_head(head,"up")
 
         #crashing is obviously a big no no
-        if crash_test(body,p_h):
-          go_up -= 100 
+        if crash_test(snake_bodies,p_h):
+          go_up -= crash_weight 
+
+        #going where you might collide with the head of another snake is bad, but not
+        # as bad as crashing into a wall or body
+        if crash_test(head_hazards,p_h):
+          go_up -= head_weight 
+
+        #penalty for going towards edges where might get pinned
+        if p_h["x"] in yellow:
+          go_up -= edge_weight
+        if p_h["y"] in yellow:
+          go_up -= edge_weight
+        if p_h["x"] in red:
+          go_up -= 2*edge_weight
+        if p_h["y"] in red:
+          go_up -= 2*edge_weight
 
         #for now we want it to go towards the nearest food  
-        go_up += base_food - nearby_food(food,p_h)
+        go_up += (base_food - nearby_food(food,p_h))*food_weight
 
+        
+        
         ##################################
         ## pros and cons of going down ###
         ##################################
         p_h = proposed_head(head,"down")
 
         #crashing is obviously a big no no
-        if crash_test(body,p_h):
-          go_down -= 100 
+        if crash_test(snake_bodies,p_h):
+          go_down -= crash_weight 
+
+        #penalty for going towards edges where might get pinned
+        if p_h["x"] in yellow:
+          go_down -= edge_weight
+        if p_h["y"] in yellow:
+          go_down -= edge_weight
+        if p_h["x"] in red:
+          go_down -= 2*edge_weight
+        if p_h["y"] in red:
+          go_down -= 2*edge_weight
+
+        #going where you might collide with the head of another snake is bad, but not
+        # as bad as crashing into a wall or body
+        if crash_test(head_hazards,p_h):
+          go_down -= head_weight 
 
         #for now we want it to go towards the nearest food  
-        go_left += base_food - nearby_food(food,p_h)
+        go_left += (base_food - nearby_food(food,p_h))*food_weight
+
+
+
 
         #determine which moves are the most benificial
         options = {'down':go_down,'left':go_left,'right':go_right,'up':go_up}
