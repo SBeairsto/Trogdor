@@ -43,27 +43,19 @@ class Battlesnake(object):
         # TODO: Use the information in cherrypy.request.json to decide your next move.
         data = cherrypy.request.json
 
-   
-        you = data["you"]
-        head = you["head"]
-        body = you["body"]
-
-        #determine where the nearest food is, so can hunt it down
-        board = data["board"].copy()
-        food = board['food']
-
+        #############################
+        ##  Function Definitions   ##
+        #############################   
+        
         #this function returns the distance of the nearest food
         def nearby_food(food,head):
           nearest_food_dist = 1000
           for bite in food:
             distance = abs(head["x"]-bite["x"])+abs(head["y"]-bite["y"])
             if distance < nearest_food_dist:
-              nearest_food = bite.copy()
               nearest_food_dist = distance
           return nearest_food_dist
 
-        #the distance of the nearest food to the head
-        base_food = nearby_food(food,head)
         
         #this function determines where the proposed head will be if move is made
         def proposed_head(head,move):
@@ -82,65 +74,254 @@ class Battlesnake(object):
             #print("goin left!")
           return p_h
 
-        #The snake move reward program
+      
+        #this function determines all the ajacent squares to a given square
+        def adjacent_squares(square):
+          
+          adj_squares = []
+          
+          #up
+          temp = square.copy()
+          temp["y"] += 1
+          adj_squares.append(temp)
+
+          #down
+          temp = square.copy()
+          temp["y"] -= 1
+          adj_squares.append(temp)
+
+          #left
+          temp = square.copy() 
+          temp["x"] += 1
+          adj_squares.append(temp)
+
+          #right
+          temp = square.copy() 
+          temp["x"] -= 1
+          adj_squares.append(temp)
+
+          return adj_squares   
+
+
+        #determines whether a proposed move will make the snake crash into
+        #a wall or the given hazards 
+        def crash_test(hazards,p_h):
+          return p_h["x"] < 0 or p_h["x"] >= 11 or p_h["y"] < 0 or p_h["y"] >= 11 or p_h in hazards
+
+        ###################################################
+        ##  Pull board information and define variables  ##
+        ###################################################
+        
+        my_snake = data["you"].copy()
+        my_head = my_snake["head"].copy()
+        my_body = my_snake["body"].copy()
+
+        board = data["board"].copy()
+        food = board['food']
+        all_snakes = board["snakes"].copy()
+
+
+        #determine which board spaces are occupied by the bodies
+        #and heads of other snakes
+        other_bodies = []
+        other_heads = []
+        
+        for snake in all_snakes:
+          if not snake["body"] in my_body: 
+            other_bodies += snake["body"]
+          if snake["head"] != my_head:
+            other_heads.append(snake["head"])        
+
+        #determines all the squares the other snake heads might move in the next
+        #turn. (Attack these if we are bigger than them, avoid otherwise)
+        around_other_heads = []
+        for enemy_head in other_heads:
+          around_other_heads.append(adjacent_squares(enemy_head))
+       
+         #determines all the squares around the bodies of other snakes (might
+         #want to avoid these as it is possible to get trapped by them)
+        around_other_bodies = []
+        for part in other_bodies:
+          around_other_bodies.append(adjacent_squares(part))
+
+        #determines all the squares around the bodies of our snake (might
+        #want to avoid these as it is possible to get trapped by them)
+        around_my_body = []
+        for part in my_body:
+          around_my_body.append(adjacent_squares(part))          
+
+        #the distance of the nearest food to our head
+        base_food = nearby_food(food,my_head)
+        
+
+        ####################################
+        ## The snake move reward program ##
+        ####################################
+        
         go_up = 0
         go_down = 0
         go_left = 0
         go_right = 0
 
-        #determines whether a proposed move will make the snake crash
-        def crash_test(body,p_h):
-          return p_h["x"] < 0 or p_h["x"] >= 11 or p_h["y"] < 0 or p_h["y"] >= 11 or p_h in body
+        #define hazard zones relative to edges
+        green = [3,4,5,6,7]  #safest near the middle
+        yellow = [1,2,8,9]  #bit more dangerous towards the edges
+        red = [0,10] #can easily get pinned right on edges and corners
 
+        #define weights of rewards and penalties, tweak these for best performance
+        
+        #reward for avoiding edges
+        edge_weight = 2
+
+        #reward for moving towards nearest food
+        if my_snake["health"] < 30:
+          food_weight = 1
+        else:
+          food_weight = 1
+
+        #penalty for crashing into wall or body
+        crash_weight = 100
+      
+        #penalty for moving to squares adjacent to enemy heads
+        head_weight = 50
+
+        #penalty for moving within a square of snake bodies
+        body_weight = 6
+        
 
         ##################################
         ## pros and cons of going right ##
         ##################################
+        p_h = proposed_head(my_head,"right")
 
-        p_h = proposed_head(head,"right")
+        #crashing into snakes and walls is obviously a big no no
+        if crash_test(other_bodies,p_h):
+          go_right -= crash_weight  
+        if crash_test(my_body,p_h):
+          go_right -= crash_weight  
 
-        #crashing is obviously a big no no
-        if crash_test(body,p_h):
-          go_right -= 100 
+        #going where you might collide with the head of another snake is bad, but not
+        # as bad as crashing into a wall or body
+        go_right -= head_weight*around_other_heads.count(p_h)
+
+        #we are going to try to keep a buffer between our head and bodies
+        go_right -= body_weight*around_other_bodies.count(p_h) 
+
+        #penalty for going towards edges where might get pinned
+        if p_h["x"] in yellow:
+          go_right -= edge_weight
+        if p_h["y"] in yellow:
+          go_right -= edge_weight
+        if p_h["x"] in red:
+          go_right -= 2*edge_weight
+        if p_h["y"] in red:
+          go_right -= 2*edge_weight
 
         #for now we want it to go towards the nearest food  
-        go_right += base_food - nearby_food(food,p_h)
+        go_right += (base_food - nearby_food(food,p_h))*food_weight
+        
         
         ##################################
         ## pros and cons of going left ##
         ##################################
-        p_h = proposed_head(head,"left")
+        p_h = proposed_head(my_head,"right")
 
-        #crashing is obviously a big no no
-        if crash_test(body,p_h):
-          go_left -= 100  
+        #crashing into snakes and walls is obviously a big no no
+        if crash_test(other_bodies,p_h):
+          go_left -= crash_weight  
+        if crash_test(my_body,p_h):
+          go_left -= crash_weight  
+
+        #going where you might collide with the head of another snake is bad, but not
+        # as bad as crashing into a wall or body
+        go_left -= head_weight*around_other_heads.count(p_h)
+
+        #we are going to try to keep a buffer between our head and bodies
+        go_left -= body_weight*around_other_bodies.count(p_h) 
+
+        #penalty for going towards edges where might get pinned
+        if p_h["x"] in yellow:
+          go_left -= edge_weight
+        if p_h["y"] in yellow:
+          go_left -= edge_weight
+        if p_h["x"] in red:
+          go_left -= 2*edge_weight
+        if p_h["y"] in red:
+          go_left -= 2*edge_weight
 
         #for now we want it to go towards the nearest food  
-        go_left += base_food - nearby_food(food,p_h)
+        go_left += (base_food - nearby_food(food,p_h))*food_weight
 
+        
+        
         ##################################
         ## pros and cons of going up ##
         ##################################
-        p_h = proposed_head(head,"up")
+        p_h = proposed_head(my_head,"right")
 
-        #crashing is obviously a big no no
-        if crash_test(body,p_h):
-          go_up -= 100 
+        #crashing into snakes and walls is obviously a big no no
+        if crash_test(other_bodies,p_h):
+          go_up -= crash_weight  
+        if crash_test(my_body,p_h):
+          go_up -= crash_weight  
+
+        #going where you might collide with the head of another snake is bad, but not
+        # as bad as crashing into a wall or body
+        go_up -= head_weight*around_other_heads.count(p_h)
+
+        #we are going to try to keep a buffer between our head and bodies
+        go_up -= body_weight*around_other_bodies.count(p_h) 
+
+        #penalty for going towards edges where might get pinned
+        if p_h["x"] in yellow:
+          go_up -= edge_weight
+        if p_h["y"] in yellow:
+          go_up -= edge_weight
+        if p_h["x"] in red:
+          go_up -= 2*edge_weight
+        if p_h["y"] in red:
+          go_up -= 2*edge_weight
 
         #for now we want it to go towards the nearest food  
-        go_up += base_food - nearby_food(food,p_h)
+        go_up += (base_food - nearby_food(food,p_h))*food_weight
 
+        
+        
         ##################################
         ## pros and cons of going down ###
         ##################################
-        p_h = proposed_head(head,"down")
+        p_h = proposed_head(my_head,"right")
 
-        #crashing is obviously a big no no
-        if crash_test(body,p_h):
-          go_down -= 100 
+        #crashing into snakes and walls is obviously a big no no
+        if crash_test(other_bodies,p_h):
+          go_down -= crash_weight  
+
+        if crash_test(my_body,p_h):
+          go_down -= crash_weight   
+
+        #going where you might collide with the head of another snake is bad, but not
+        # as bad as crashing into a wall or body
+        go_down -= head_weight*around_other_heads.count(p_h)
+
+        #we are going to try to keep a buffer between our head and bodies
+        go_down -= body_weight*around_other_bodies.count(p_h) 
+
+        #penalty for going towards edges where might get pinned
+        if p_h["x"] in yellow:
+          go_down -= edge_weight
+        if p_h["y"] in yellow:
+          go_down -= edge_weight
+        if p_h["x"] in red:
+          go_down -= 2*edge_weight
+        if p_h["y"] in red:
+          go_down -= 2*edge_weight
 
         #for now we want it to go towards the nearest food  
-        go_left += base_food - nearby_food(food,p_h)
+        go_down += (base_food - nearby_food(food,p_h))*food_weight
+
+
+
+
 
         #determine which moves are the most benificial
         options = {'down':go_down,'left':go_left,'right':go_right,'up':go_up}
